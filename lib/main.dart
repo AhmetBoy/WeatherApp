@@ -12,6 +12,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: ThemeData(
+        indicatorColor: Colors.orange,
+        filledButtonTheme: FilledButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: MaterialStatePropertyAll(Colors.orange),
+          ),
+        ),
+      ),
       home: HomePage(),
     );
   }

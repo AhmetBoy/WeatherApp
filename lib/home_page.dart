@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hava_durumu2/constants.dart';
 import 'package:hava_durumu2/search_page.dart';
+import 'package:hava_durumu2/widgets/daily_card.dart';
+import 'package:hava_durumu2/widgets/loading_widget.dart';
 import 'package:http/http.dart' as http;
 
 class HomePage extends StatefulWidget {
@@ -20,9 +23,103 @@ class _HomePageState extends State<HomePage> {
   double? temp;
   String? secilenSehir;
   Position? devicePosition;
-  var locationData;
+  List<String?> iconNameFiveDay = [];
+  List<double?> tempFiveDay = [];
+  List<DateTime?> dateFiveDay = [];
+  double? toplam = 0;
+  double? tempBirinciGun;
+  int? sayac = 0;
+  int zaman = DateTime.now().hour;
 
-  Future<void> getTempeture() async {
+  List<double> tempList = [0, 0, 0, 0, 0];
+  List<String> dateList = ["Pazartesi", "Salı", "çarşamba", "Perşembe", "cuma"];
+  List<String> iconNameList = ["09d", "09d", "09d", "09d", "09d"];
+  List<String> gunler = [
+    "Pazartesi",
+    "Salı",
+    "çarşamba",
+    "Perşembe",
+    "cuma",
+    "cumartesi",
+    "Pazar"
+  ];
+  var locationData;
+  int birinciGunIndexSayisi = ((24 - DateTime.now().hour) / 3).round() == 0
+      ? 1
+      : ((24 - DateTime.now().hour) / 3).round();
+
+  Future<void> getPosition() async {
+    devicePosition = await _determinePosition();
+    lat = devicePosition!.latitude;
+    lon = devicePosition!.longitude;
+
+    print("lat  ${lat},lon  ${lon}");
+  }
+
+  Future<void> getPositionTemperature() async {
+    print("saat     ${((24 - zaman) / 3).round()}");
+    locationData = await http.get(Uri.parse(
+        "https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lat}&units=metric&appid=c58bb57d87e43610ddde7628f6f8140f"));
+    var json = jsonDecode(locationData.body);
+    json["cod"] == "404"
+        ? print("404404")
+        : setState(() {
+            temp = json["main"]["temp"];
+            secilenSehir = json["name"];
+            arkaPlan = "images/${json["weather"][0]["main"]}.jpg";
+            iconName = json["weather"][0]["icon"];
+          });
+  }
+
+  Future<void> getPositionForecast() async {
+    locationData = await http.get(Uri.parse(
+        "https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=bee0d0175d53df684f463fb8bf6b3828&units=metric"));
+    var json = jsonDecode(locationData.body);
+    json["cod"] == "404"
+        ? print("404404")
+        : setState(() {
+            tempList.clear();
+            dateList.clear();
+            iconNameList.clear();
+            tempFiveDay.clear();
+            iconNameFiveDay.clear();
+            dateFiveDay.clear();
+            toplam = 0;
+            for (int i = 0; i < 40; i++) {
+              tempFiveDay.add(json["list"][i]["main"]["temp"]);
+              iconNameFiveDay.add(json["list"][i]["weather"][0]["icon"]);
+              dateFiveDay.add(DateTime.parse(json["list"][i]["dt_txt"]));
+            }
+            for (int i = 0; i < birinciGunIndexSayisi; i++) {
+              toplam = toplam! + tempFiveDay[i]!;
+            }
+            tempList.add(toplam! / birinciGunIndexSayisi);
+
+            int? sayac = birinciGunIndexSayisi;
+            for (int i = 0;
+                i < ((40 - birinciGunIndexSayisi) / 8).round();
+                i++) {
+              toplam = 0;
+              try {
+                for (int j = 0; j < 8; j++) {
+                  toplam = toplam! + tempFiveDay[sayac!]!;
+                  sayac = sayac + 1;
+                }
+              } catch (value) {
+                print("hi");
+              }
+              tempList.add(toplam! / 8);
+            }
+            for (int i = 0; i < 40; i = i + 8) {
+              iconNameList.add(iconNameFiveDay[i]!);
+            }
+            for (int i = 0; i < 40; i = i + 8) {
+              dateList.add(gunler[(dateFiveDay[i]?.weekday)! - 1]);
+            }
+          });
+  }
+
+  Future<void> getTemperature() async {
     locationData = await http.get(Uri.parse(
         "https://api.openweathermap.org/data/2.5/weather?q=$secilenSehir&units=metric&appid=c58bb57d87e43610ddde7628f6f8140f"));
     var json = jsonDecode(locationData.body);
@@ -36,44 +133,79 @@ class _HomePageState extends State<HomePage> {
           });
   }
 
-  Future<void> getDevicePosition() async {
-    devicePosition = await _determinePosition();
-    lat = devicePosition!.latitude;
-    lon = devicePosition!.longitude;
-    print("lat={$lat}&lon={$lon}");
+  Future<void> getForecastData() async {
+    var zaman = DateTime.now().hour;
+
     locationData = await http.get(Uri.parse(
-        "https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&units=metric&appid=c58bb57d87e43610ddde7628f6f8140f"));
+        "https://api.openweathermap.org/data/2.5/forecast?q=$secilenSehir&appid=bee0d0175d53df684f463fb8bf6b3828&units=metric"));
     var json = jsonDecode(locationData.body);
     json["cod"] == "404"
         ? print("404404")
         : setState(() {
-            temp = json["main"]["temp"];
-            var havaDurumu = json["weather"][0]["main"];
-            secilenSehir = json["name"];
-            arkaPlan = "images/$havaDurumu.jpg";
-            iconName = json["weather"][0]["icon"];
+            tempList.clear();
+            dateList.clear();
+            iconNameList.clear();
+            tempFiveDay.clear();
+            iconNameFiveDay.clear();
+            dateFiveDay.clear();
+            toplam = 0;
+            for (int i = 0; i < 40; i++) {
+              tempFiveDay.add(json["list"][i]["main"]["temp"]);
+              iconNameFiveDay.add(json["list"][i]["weather"][0]["icon"]);
+              dateFiveDay.add(DateTime.parse(json["list"][i]["dt_txt"]));
+            }
+            for (int i = 0; i < 40; i = i + 8) {
+              iconNameList.add(iconNameFiveDay[i]!);
+            }
+            for (int i = 0; i < 40; i = i + 8) {
+              dateList.add(gunler[(dateFiveDay[i]?.weekday)! - 1]);
+            }
+            for (int i = 0; i < ((24 - zaman) / 3).round(); i++) {
+              toplam = toplam! + tempFiveDay[i]!;
+            }
+            tempList.add(toplam! / ((24 - zaman) / 3).round());
+
+            tempBirinciGun = toplam! / ((24 - zaman) / 3).round();
+            sayac = ((24 - zaman) / 3).round();
+            for (int i = 0;
+                i < ((40 - ((24 - zaman) / 3).round()) / 8).round();
+                i++) {
+              toplam = 0;
+              try {
+                for (int j = 0; j < 8; j++) {
+                  toplam = toplam! + tempFiveDay[sayac!]!;
+                  sayac = sayac! + 1;
+                }
+              } catch (value) {}
+              tempList.add(toplam! / 8);
+            }
           });
+  }
+
+  Future<void> begin() async {
+    await getPosition();
+    await getPositionTemperature();
+    await getPositionForecast();
   }
 
   @override
   void initState() {
-    getDevicePosition();
+    begin();
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        image: DecorationImage(
-          fit: BoxFit.cover,
-          image: AssetImage(arkaPlan.toString()),
-        ),
+    BoxDecoration boxDecorationContainer = BoxDecoration(
+      image: DecorationImage(
+        fit: BoxFit.cover,
+        image: AssetImage(arkaPlan.toString()),
       ),
+    );
+    return Container(
+      decoration: boxDecorationContainer,
       child: locationData == null
-          ? Center(
-              child: CircularProgressIndicator(),
-            )
+          ? loadingWidget()
           : Scaffold(
               backgroundColor: Colors.transparent,
               body: Column(
@@ -88,17 +220,26 @@ class _HomePageState extends State<HomePage> {
                   ),
                   FilledButton(
                       onPressed: () async {
-                        await getTempeture();
-                        print(locationData.body);
+                        await getTemperature();
+                        await getForecastData();
                       },
                       child: Text("GET")),
-                  Text(temp.toString(),
-                      style: TextStyle(fontSize: 70, color: Colors.white)),
+                  Text(
+                    temp.toString(),
+                    style: TextStyle(
+                      fontSize: 70,
+                      color: Colors.white,
+                      shadows: kTextShadow,
+                    ),
+                  ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(secilenSehir.toString(),
-                          style: TextStyle(fontSize: 40, color: Colors.white)),
+                      Text(secilenSehir == null ? "" : secilenSehir.toString(),
+                          style: TextStyle(
+                              fontSize: 40,
+                              color: Colors.white,
+                              shadows: kTextShadow)),
                       IconButton(
                         onPressed: () async {
                           final secilenSehir1 = await Navigator.push(
@@ -114,7 +255,15 @@ class _HomePageState extends State<HomePage> {
                         icon: Icon(Icons.search),
                       )
                     ],
-                  )
+                  ),
+                  SizedBox(height: 100),
+                  Expanded(
+                    child: DailyCard(
+                        tempList: tempList,
+                        dateList: dateList,
+                        iconNameList: iconNameList),
+                  ),
+                  SizedBox(height: 100),
                 ],
               )),
     );
@@ -124,6 +273,8 @@ class _HomePageState extends State<HomePage> {
   ///
   /// When the location services are not enabled or permissions
   /// are denied the `Future` will return an error.
+  ///
+  ///
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
